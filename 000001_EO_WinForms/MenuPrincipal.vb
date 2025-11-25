@@ -109,13 +109,88 @@
 
     Private Sub btnCalcEquals_Click(sender As Object, e As EventArgs) Handles btnEquals.Click
         Try
-            Dim dt As New DataTable()
-            Dim result As Object = dt.Compute(txtCalcDisplay.Text, "")
+            ' Safe expression evaluator that only handles basic arithmetic
+            Dim expression As String = txtCalcDisplay.Text
+            Dim result As Double = EvaluateSafeExpression(expression)
             txtCalcDisplay.Text = result.ToString()
         Catch ex As Exception
             txtCalcDisplay.Text = "Error"
         End Try
     End Sub
+
+    ' Safe expression evaluator that only handles numbers and basic operators (+, -, *, /)
+    Private Function EvaluateSafeExpression(expression As String) As Double
+        ' Validate input contains only allowed characters (digits, operators, decimal point)
+        Dim allowedChars As String = "0123456789+-*/."
+        For Each c As Char In expression
+            If Not allowedChars.Contains(c) Then
+                Throw New ArgumentException("Invalid character in expression")
+            End If
+        Next
+
+        ' Simple left-to-right evaluation (handles one operator at a time)
+        Dim tokens As New List(Of String)()
+        Dim currentNumber As String = ""
+
+        For Each c As Char In expression
+            If "+-*/".Contains(c) Then
+                If currentNumber.Length > 0 Then
+                    tokens.Add(currentNumber)
+                    currentNumber = ""
+                End If
+                tokens.Add(c.ToString())
+            Else
+                currentNumber &= c
+            End If
+        Next
+
+        If currentNumber.Length > 0 Then
+            tokens.Add(currentNumber)
+        End If
+
+        If tokens.Count = 0 Then Return 0
+
+        ' Evaluate with proper operator precedence (* and / first, then + and -)
+        ' First pass: handle * and /
+        Dim i As Integer = 0
+        While i < tokens.Count
+            If tokens(i) = "*" OrElse tokens(i) = "/" Then
+                Dim left As Double = Convert.ToDouble(tokens(i - 1))
+                Dim right As Double = Convert.ToDouble(tokens(i + 1))
+                Dim res As Double
+
+                If tokens(i) = "*" Then
+                    res = left * right
+                Else
+                    If right = 0 Then Throw New DivideByZeroException()
+                    res = left / right
+                End If
+
+                tokens(i - 1) = res.ToString()
+                tokens.RemoveAt(i)
+                tokens.RemoveAt(i)
+                i -= 1
+            End If
+            i += 1
+        End While
+
+        ' Second pass: handle + and -
+        Dim result As Double = Convert.ToDouble(tokens(0))
+        i = 1
+        While i < tokens.Count
+            Dim op As String = tokens(i)
+            Dim num As Double = Convert.ToDouble(tokens(i + 1))
+
+            If op = "+" Then
+                result += num
+            ElseIf op = "-" Then
+                result -= num
+            End If
+            i += 2
+        End While
+
+        Return result
+    End Function
 
     Private Sub btnCalcOp_Click(sender As Object, e As EventArgs) Handles btnPlus.Click, btnMinus.Click, btnMult.Click, btnDiv.Click
         Dim btn As Button = CType(sender, Button)
